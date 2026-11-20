@@ -1,0 +1,11 @@
+# 런타임
+PyQt6>=6.6
+av>=14.0          # HWAccel API (d3d11va/dxva2/cuda/qsv) 는 PyAV 14+ 필요. FFmpeg 포함 휠.
+numpy>=1.26
+onnxruntime-directml>=1.18; sys_platform == "win32"  # AI 감지 (YOLOX, Windows GPU DirectML + CPU 폴백)
+onnxruntime>=1.18; sys_platform != "win32"           # AI 감지 (YOLOX, Linux CPU)
+cryptography>=42   # 업데이트 서명(Ed25519) 검증
+
+# 빌드
+pyinstaller>=6.5
+pillow>=10.0      # assets/make_icon.py (아이콘 생성). 설치 프로그램은 Inno Setup 6 필요

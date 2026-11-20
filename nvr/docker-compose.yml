@@ -1,0 +1,66 @@
+# 4~6채널 저부하 NVR: go2rtc(릴레이) + Frigate(감지/녹화, 선택)
+#   cp .env.example .env && vi .env && docker compose up -d
+#   Frigate 까지:  docker compose --profile frigate up -d
+#
+# [카메라 N대] --(메인 1 + 서브 1 연결)--> go2rtc --+--> Frigate (sub: 감지, main: 녹화 copy)
+#                                                  +--> PC 뷰어 (RTSP 8554)
+
+services:
+  go2rtc:
+    image: alexxit/go2rtc:1.9.14      # 검증한 버전으로 고정
+    container_name: go2rtc
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./go2rtc/go2rtc.yaml:/config/go2rtc.yaml:ro
+    ports:
+      - "8554:8554"                   # RTSP 재송출 (인증 필요)
+      - "8555:8555/tcp"               # WebRTC
+      - "8555:8555/udp"
+      # 웹 UI/API: 기본은 서버 로컬에서만. 관리 PC 에서 쓰려면 "192.168.0.10:1984:1984" 처럼
+      # 서버 LAN IP 로 바꾸고 방화벽에서 관리 PC 대역만 허용할 것
+      - "127.0.0.1:1984:1984"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"                 # 패킷 복사 릴레이이므로 0.5코어면 충분
+          memory: 256M
+    healthcheck:
+      # 인증이 걸려 있어도 401 응답이면 프로세스는 살아있다고 판단
+      test: ["CMD-SHELL", "wget -q -S -O /dev/null http://127.0.0.1:1984/ 2>&1 | grep -qE 'HTTP/1.1 (200|401)'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frigate:
+    profiles: ["frigate"]             # 기본 실행에서 제외. 필요 시 --profile frigate
+    image: ghcr.io/blakeblackshear/frigate:stable   # 운영 시 버전 고정 권장
+    container_name: frigate
+    restart: unless-stopped
+    depends_on:
+      - go2rtc
+    env_file: .env
+    # 카메라당 (640*360*1.5*20 + 270480) B ≈ 7MB x 6 + 로그 여유
+    shm_size: "128mb"
+    volumes:
+      - ./frigate/config:/config
+      - ./frigate/storage:/media/frigate       # 녹화 저장소: 별도 디스크로 마운트 권장
+      - type: tmpfs                            # 녹화 세그먼트 캐시를 RAM 에 -> 디스크 쓰기 감소
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+    ports:
+      - "8971:8971"                   # 웹 UI (HTTPS + 로그인). 최초 admin 비밀번호는 로그에 출력
+      # 5000 (무인증 내부 API) 은 외부에 열지 않는다
+    # Linux + Intel iGPU: 아래 주석 해제 후 config.yml 에서 device: GPU / preset-vaapi
+    # devices:
+    #   - /dev/dri/renderD128:/dev/dri/renderD128
+    # NVIDIA: 이미지 태그 stable-tensorrt + 아래 주석 해제
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    stop_grace_period: 30s

@@ -1,0 +1,49 @@
+# go2rtc: 카메라당 연결 1개로 모든 소비자(Frigate, PC 뷰어, 브라우저)에 재송출.
+# 코덱 변환(트랜스코딩) 없는 패킷 복사 릴레이 -> CPU 사용량 사실상 0.
+# ${VAR} 는 컨테이너 환경변수(.env)로 치환된다.
+
+api:
+  listen: ":1984"
+  username: ${GO2RTC_API_USER}
+  password: ${GO2RTC_API_PASS}
+  origin: ""            # 타 사이트의 CORS 요청 차단
+
+rtsp:
+  listen: ":8554"
+  username: ${RELAY_USER}
+  password: ${RELAY_PASS}
+  default_query: "video"  # 기본은 영상만 (카메라 오디오가 필요하면 "video&audio")
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - ${HOST_IP}:8555
+    - stun:8555           # 외부망 접속 시 공인 IP 자동 탐지
+
+# 보안 참고: go2rtc 는 exec: 소스(셸 명령 실행)를 지원하므로 API(1984)가 무인증으로
+# 노출되면 원격 명령 실행 경로가 된다. 위 api 인증을 반드시 유지하고, 1984 는
+# docker-compose.yml 에서 관리 PC 대역/localhost 로만 바인딩한다.
+
+log:
+  level: info
+
+# 이름 규칙: camN_main (고화질, 녹화/확대용) / camN_sub (저화질, 감지/그리드용)
+# Hikvision NVR: /Streaming/Channels/{채널}01 = 메인, {채널}02 = 서브 (카메라는 NVR 내부망이라 NVR IP + 채널로 접속)
+# Tapo(C320WS 등): /stream1 = 메인, /stream2 = 서브. 계정은 Tapo 앱 > 고급 설정 > 카메라 계정
+# 단독 Hikvision 카메라: rtsp://user:pass@카메라IP:554/Streaming/Channels/101 (채널 1 고정)
+# 연결은 소비자가 있을 때만 생성되고(on-demand), 소비자가 없으면 끊긴다.
+# 카메라를 추가/삭제하면 .env 의 CAMERAS(모바일 표시 목록)도 같이 맞출 것.
+streams:
+  cam1_main: rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/101
+  cam1_sub:  rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/102
+  cam2_main: rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/201
+  cam2_sub:  rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/202
+  cam3_main: rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/301
+  cam3_sub:  rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/302
+  cam4_main: rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/401
+  cam4_sub:  rtsp://${NVR_USER}:${NVR_PASS}@${NVR_IP}:554/Streaming/Channels/402
+  cam5_main: rtsp://${TAPO_USER}:${TAPO_PASS}@${TAPO_IP}:554/stream1
+  cam5_sub:  rtsp://${TAPO_USER}:${TAPO_PASS}@${TAPO_IP}:554/stream2
+
+# 참고: 브라우저(특히 아이폰)로 H.265 를 MSE/HLS 재생하면 go2rtc 1.9.14 가 헤더에 해상도 기본값(2560x1440)을 넣어
+# 화면이 1/4 + 초록색이 된다 (NVR SDP 에 SPS 가 없음). 필요하면 원본을 camN_*_raw 로 받고 ffmpeg:camN_*_raw#video=copy 로 내보낼 것

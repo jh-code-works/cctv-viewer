@@ -1,0 +1,125 @@
+# Frigate: go2rtc 가 재송출하는 스트림만 소비한다 (카메라에 직접 접속하지 않음).
+#  - detect : 서브스트림(640x360) 을 5fps 로 디코딩 -> 객체 감지  (CPU 사용의 대부분)
+#  - record : 메인스트림을 디코딩 없이 그대로 세그먼트 저장 (-c copy, CPU ~0)
+# 인증 정보는 .env 의 FRIGATE_RTSP_USER / FRIGATE_RTSP_PASSWORD 로 치환된다.
+
+mqtt:
+  enabled: false
+
+# Frigate 내장 go2rtc: 웹 UI 라이브뷰(WebRTC/MSE)용. 외부 go2rtc 를 한 번 더 릴레이만 하므로
+# 트랜스코딩 없음. 스트림 이름을 카메라 이름과 같게 두면 라이브뷰가 자동으로 사용한다.
+# (이게 없으면 Frigate 는 jsmpeg 로 재인코딩해 CPU 를 쓴다)
+go2rtc:
+  streams:
+    cam1: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam1_main
+    cam2: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam2_main
+    cam3: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam3_main
+    cam4: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam4_main
+    cam5: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam5_main
+    cam6: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam6_main
+
+# ---- 객체 감지기 ----
+# OpenVINO 는 Intel CPU 에서도 기본 CPU 감지기(TFLite)보다 수 배 빠르다.
+# Intel 내장 GPU(iGPU) 가 있는 Linux 호스트라면 device: GPU 로 바꾸고
+# docker-compose.yml 의 /dev/dri 매핑을 활성화하면 CPU 부하가 더 내려간다.
+# NVIDIA: type: onnx + 이미지 태그 stable-tensorrt 사용 (Frigate 문서 참조)
+detectors:
+  ov:
+    type: openvino
+    device: CPU
+
+model:
+  width: 300
+  height: 300
+  input_tensor: nhwc
+  input_pixel_format: bgr
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+
+# ---- FFmpeg 공통 ----
+ffmpeg:
+  # 서브스트림 디코딩용 하드웨어 가속. 360p x 6채널 x 5fps 는 CPU 로도 가볍지만
+  # Linux + Intel iGPU 라면 preset-vaapi, NVIDIA 라면 preset-nvidia 로 변경.
+  # hwaccel_args: preset-vaapi
+  input_args: preset-rtsp-restream
+  output_args:
+    record: preset-record-generic-audio-copy
+
+detect:
+  enabled: true
+  width: 640     # 카메라 서브스트림 해상도와 반드시 일치 (Hikvision 기본 640x360 또는 640x480)
+  height: 360
+  fps: 5         # 감지에는 5fps 면 충분. 높일수록 CPU 선형 증가
+
+objects:
+  track: [person, car]
+
+motion:
+  # 움직임이 있을 때만 감지기 호출 -> 정지 화면에서는 감지 비용 거의 0
+  threshold: 30
+
+record:
+  enabled: true
+  retain:
+    days: 3
+    mode: motion       # 움직임 있는 구간만 보존 -> 저장 공간 절약
+  alerts:
+    retain:
+      days: 14
+  detections:
+    retain:
+      days: 14
+
+snapshots:
+  enabled: true
+  retain:
+    default: 14
+
+birdseye:
+  enabled: false       # 합성 화면은 상시 인코딩 비용이 들므로 비활성화
+
+# ---- 카메라 ----
+# 입력 2개: 서브(detect) + 메인(record). 둘 다 go2rtc 를 경유한다.
+cameras:
+  cam1:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam1_sub
+          roles: [detect]
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam1_main
+          roles: [record]
+  cam2:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam2_sub
+          roles: [detect]
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam2_main
+          roles: [record]
+  cam3:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam3_sub
+          roles: [detect]
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam3_main
+          roles: [record]
+  cam4:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam4_sub
+          roles: [detect]
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam4_main
+          roles: [record]
+  cam5:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam5_sub
+          roles: [detect]
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam5_main
+          roles: [record]
+  cam6:
+    ffmpeg:
+      inputs:
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam6_sub
+          roles: [detect]
+        - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@go2rtc:8554/cam6_main
+          roles: [record]

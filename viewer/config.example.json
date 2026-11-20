@@ -1,0 +1,71 @@
+{
+  "cameras": [
+    {
+      "name": "정문",
+      "enabled": true,
+      "ip": "192.168.0.64",
+      "port": 554,
+      "username": "admin",
+      "password": "change-me",
+      "channel": 1
+    },
+    {
+      "name": "주차장",
+      "enabled": true,
+      "ip": "192.168.0.65",
+      "port": 554,
+      "username": "admin",
+      "password": "change-me",
+      "channel": 1
+    },
+    {
+      "name": "CAM 3",
+      "enabled": false,
+      "ip": "",
+      "port": 554,
+      "username": "admin",
+      "password": "",
+      "channel": 1
+    },
+    {
+      "name": "CAM 4",
+      "enabled": false,
+      "ip": "",
+      "port": 554,
+      "username": "admin",
+      "password": "",
+      "channel": 1
+    },
+    {
+      "name": "CAM 5",
+      "enabled": false,
+      "ip": "",
+      "port": 554,
+      "username": "admin",
+      "password": "",
+      "channel": 1
+    },
+    {
+      "name": "CAM 6",
+      "enabled": false,
+      "ip": "",
+      "port": 554,
+      "username": "admin",
+      "password": "",
+      "channel": 1
+    }
+  ],
+  "layout": 3,
+  "hwaccel": "auto",
+  "hwaccel_on_sub": false,
+  "rtsp_transport": "tcp",
+  "grid_max_fps": 15,
+  "fullscreen_max_fps": 30,
+  "go2rtc": {
+    "enabled": false,
+    "host": "192.168.0.10",
+    "port": 8554,
+    "username": "",
+    "password": ""
+  }
+}

@@ -1,0 +1,11 @@
+# OS / 편집기
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+# 도구 작업 폴더
+.playwright-mcp/
+.claude/
+# 비밀 정보 (각 하위 폴더 .gitignore 에도 있음: viewer/keys/, viewer/config.json, nvr/.env)
+*.pem
+.env

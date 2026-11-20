@@ -1,0 +1,6 @@
+* text=auto
+# 리눅스 컨테이너에서 실행 -> CRLF 면 bash 가 실패
+*.sh text eol=lf
+*.onnx binary
+*.ico binary
+*.png binary
